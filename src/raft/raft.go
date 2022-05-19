@@ -63,11 +63,11 @@ const (
 )
 
 type LogEntry struct {
-	index int
-	term  int
-	op    Op
-	key   string
-	val   string
+	Index int
+	Term  int
+	Op    Op
+	Key   string
+	Val   string
 }
 
 //
@@ -178,10 +178,10 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
 
-	term         int
-	candidateId  int
-	lastLogIndex int
-	lastLogTerm  int
+	Term         int
+	CandidateId  int
+	LastLogIndex int
+	LastLogTerm  int
 }
 
 //
@@ -190,8 +190,8 @@ type RequestVoteArgs struct {
 //
 type RequestVoteReply struct {
 	// Your data here (2A).
-	term        int
-	voteGranted bool
+	Term        int
+	VoteGranted bool
 }
 
 //
@@ -199,13 +199,13 @@ type RequestVoteReply struct {
 //
 func (rf *Raft) RequestVote(req *RequestVoteArgs, rsp *RequestVoteReply) {
 	// Your code here (2A, 2B).
-	if req.term < rf.term || rf.votedFor != nil {
-		rsp.voteGranted = false
-		rsp.term = rf.term
+	if req.Term < rf.term || rf.votedFor != nil {
+		rsp.VoteGranted = false
+		rsp.Term = rf.term
 	} else {
-		rf.votedFor = &req.candidateId
-		rsp.voteGranted = true
-		rsp.term = req.term
+		rf.votedFor = &req.CandidateId
+		rsp.VoteGranted = true
+		rsp.Term = req.Term
 	}
 
 }
@@ -245,17 +245,17 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 }
 
 type AppendEntriesReq struct {
-	term              int // leader's term, aka current term
-	leaderId          int
-	prevLodIndex      int
-	prevLogTerm       int
-	entries           []LogEntry
-	leaderCommitIndex int // leader’s commitIndex
+	Term              int // leader's term, aka current term
+	LeaderId          int
+	PrevLodIndex      int
+	PrevLogTerm       int
+	Entries           []LogEntry
+	LeaderCommitIndex int // leader’s commitIndex
 }
 
 type AppendEntriesRsp struct {
-	success bool
-	term    int // currentTerm, for leader to update itself
+	Success bool
+	Term    int // currentTerm, for leader to update itself
 }
 
 func (rf *Raft) sendAppendEntries(server int, req *AppendEntriesReq, rsp *AppendEntriesRsp) bool {
@@ -338,7 +338,7 @@ func (rf *Raft) checkElection() {
 		newTerm += 1
 		// 检查是否多数通过
 		var votedCount int32 = 1
-		req := &RequestVoteArgs{newTerm, rf.me, rf.logs[0].index, rf.logs[0].term}
+		req := &RequestVoteArgs{newTerm, rf.me, rf.logs[0].Index, rf.logs[0].Term}
 		for i := 0; i < len(rf.peers); i++ {
 			if i == rf.me {
 				continue
@@ -350,7 +350,7 @@ func (rf *Raft) checkElection() {
 				if !ok {
 					return
 				}
-				if rsp.voteGranted {
+				if rsp.VoteGranted {
 					atomic.AddInt32(&votedCount, 1)
 				}
 			}()
