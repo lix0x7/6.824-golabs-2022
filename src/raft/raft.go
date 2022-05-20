@@ -18,6 +18,7 @@ package raft
 //
 
 import (
+	"fmt"
 	"math/rand"
 	//	"bytes"
 	"sync"
@@ -30,7 +31,7 @@ import (
 
 const HEART_BEAT_INTERVAL int = 300     // 心跳间隔
 const TIMEOUT_TO_ELECTION_MS int = 1000 // 发起选举的超时时间
-const ELCETION_TIMEOUT = 400            // 选举超时时间
+const ELCETION_TIMEOUT = 600            // 选举超时时间
 
 //
 // as each Raft peer becomes aware that successive log entries are
@@ -204,6 +205,7 @@ func (rf *Raft) RequestVote(req *RequestVoteArgs, rsp *RequestVoteReply) {
 		rsp.Term = rf.term
 	} else {
 		rf.votedFor = &req.CandidateId
+		rf.term = req.Term
 		rsp.VoteGranted = true
 		rsp.Term = req.Term
 	}
@@ -241,6 +243,7 @@ func (rf *Raft) RequestVote(req *RequestVoteArgs, rsp *RequestVoteReply) {
 //
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
+	fmt.Printf("done sendRequestVote, server: %d, ok: %t, term: %d, voteGranted: %t\n", server, ok, reply.Term, reply.VoteGranted)
 	return ok
 }
 
@@ -326,13 +329,15 @@ func (rf *Raft) ticker() {
 }
 
 func (rf *Raft) checkElection() {
-	if rf.isLeader {
+	if rf.isLeader || rf.votedFor != nil {
+		// leader或者是已经投票给其他candidate不主动发起选举
 		return
 	}
 
 	newTerm := rf.term
 	// 如果检测到心跳超时，则发起一次新的election
-	for int(time.Now().UnixMilli())-rf.lastHeartBeatTime > HEART_BEAT_INTERVAL {
+	for int(time.Now().UnixMilli())-rf.lastHeartBeatTime > TIMEOUT_TO_ELECTION_MS {
+		time.Sleep(time.Duration(rand.Intn(300)) * time.Millisecond)
 		// start election
 		rf.votedFor = &rf.me
 		newTerm += 1
@@ -363,6 +368,7 @@ func (rf *Raft) checkElection() {
 			// 成功当选leader
 			rf.isLeader = true
 			rf.term = newTerm
+			rf.lastHeartBeatTime = int(time.Now().UnixMilli())
 		} else {
 			// 否则
 			// 1. 其他leader当选，term发生变化，下一次循环终止
