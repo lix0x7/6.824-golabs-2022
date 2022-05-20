@@ -261,6 +261,21 @@ type AppendEntriesRsp struct {
 	Term    int // currentTerm, for leader to update itself
 }
 
+func (rf *Raft) AppendEntries(req *AppendEntriesReq, rsp *AppendEntriesRsp) {
+	// Your code here (2A, 2B).
+	rsp.Term = rf.term
+	if req.Term < rf.term {
+		rsp.Success = false
+		return
+	}
+
+	rsp.Success = true
+
+	// 选举结束后触发清除选举流程相关字段
+	rf.votedFor = nil
+	rf.lastHeartBeatTime = int(time.Now().UnixMilli())
+}
+
 func (rf *Raft) sendAppendEntries(server int, req *AppendEntriesReq, rsp *AppendEntriesRsp) bool {
 	ok := rf.peers[server].Call("Raft.AppendEntries", req, rsp)
 	return ok
@@ -384,7 +399,40 @@ func (rf *Raft) heartBeat() {
 		return
 	}
 
-	// todo: leader's heart beat
+	// leader's heart beat
+	var votedCount int32 = 1
+	req := &AppendEntriesReq{rf.term, rf.me, 0, 0, make([]LogEntry, 0), 0}
+	for i := 0; i < len(rf.peers); i++ {
+		if i == rf.me {
+			continue
+		}
+		i := i
+		go func() {
+			rsp := &AppendEntriesRsp{}
+			ok := rf.sendAppendEntries(i, req, rsp)
+			if !ok {
+				return
+			}
+			if rsp.Success {
+				atomic.AddInt32(&votedCount, 1)
+			}
+			if rsp.Term > rf.term {
+				// 当响应结果被follower拒绝并且传回更新的term时，该节点不再为leader，降级为follower并且更新相关字段
+				rf.term = rsp.Term
+				rf.isLeader = false
+				rf.lastHeartBeatTime = int(time.Now().UnixMilli())
+			}
+		}()
+	}
+
+	// 等待一段时间收集同步结果
+	time.Sleep(time.Duration(ELCETION_TIMEOUT) * time.Millisecond)
+	majority := int32(len(rf.peers)/2) + 1
+	if votedCount >= majority {
+		// 成功同步，更新follower相关信息
+	} else {
+		// 同步失败？
+	}
 }
 
 //
